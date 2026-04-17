@@ -1,0 +1,240 @@
+/* ── Teacher Dashboard & Pages ── */
+.teacher-container {
+  position: relative;
+  z-index: 10;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 80px 20px 40px;
+}
+
+.teacher-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.teacher-title {
+  font-family: 'Baloo 2', cursive;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--white);
+  text-shadow: 0 3px 12px rgba(0,0,0,0.35);
+}
+.teacher-subtitle {
+  color: rgba(255,255,255,0.75);
+  font-size: .95rem;
+  margin-top: 4px;
+}
+
+/* Navigation tabs */
+.teacher-nav {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.teacher-nav a {
+  font-family: 'Baloo 2', cursive;
+  font-weight: 700;
+  font-size: .9rem;
+  padding: 8px 20px;
+  border-radius: 50px;
+  color: rgba(255,255,255,0.75);
+  border: 2px solid rgba(255,255,255,0.3);
+  transition: all .2s;
+  text-decoration: none;
+}
+.teacher-nav a:hover { background: rgba(255,255,255,0.15); color: white; text-decoration: none; }
+.teacher-nav a.active {
+  background: white;
+  color: var(--ocean-deep);
+  border-color: white;
+}
+
+/* Content card */
+.teacher-card {
+  background: white;
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  margin-bottom: 20px;
+}
+.teacher-card h2 {
+  font-family: 'Baloo 2', cursive;
+  color: var(--ocean-deep);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.toolbar .btn { font-size: .9rem; padding: 8px 16px; }
+.toolbar-spacer { flex: 1; }
+
+/* Student management */
+.student-actions {
+  display: flex;
+  gap: 6px;
+}
+.action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px;
+  border-radius: 6px;
+  transition: background .15s;
+}
+.action-btn:hover { background: #f0f4f8; }
+.action-btn.danger:hover { background: #ffebee; }
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 50px;
+  font-size: .8rem;
+  font-weight: 700;
+}
+.status-badge.active { background: #e8f5e9; color: #2e7d32; }
+.status-badge.inactive { background: #fce4ec; color: #c62828; }
+
+/* File upload area */
+.upload-area {
+  border: 3px dashed var(--ocean-light);
+  border-radius: 16px;
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  margin-bottom: 16px;
+}
+.upload-area:hover { border-color: var(--ocean-bright); background: #f5f9ff; }
+.upload-area.dragover { border-color: var(--seagrass-dark); background: #e8f5e9; }
+.upload-icon { font-size: 2.5rem; margin-bottom: 8px; }
+.upload-text { color: #78909c; font-size: .95rem; }
+.upload-hint { color: #b0bec5; font-size: .8rem; margin-top: 4px; }
+
+/* Analytics charts */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.analytics-grid .chart-card {
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+.analytics-grid .chart-card h3 {
+  font-family: 'Baloo 2', cursive;
+  color: var(--ocean-deep);
+  margin-bottom: 16px;
+  font-size: 1rem;
+}
+.analytics-grid .chart-card canvas {
+  max-height: 250px;
+}
+
+/* Reports */
+.report-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.report-filters select, .report-filters input {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 2px solid #e0e0e0;
+  font-family: 'Nunito', sans-serif;
+  font-size: .9rem;
+}
+
+.export-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.export-btn {
+  font-family: 'Baloo 2', cursive;
+  font-weight: 700;
+  font-size: .85rem;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 2px solid;
+  cursor: pointer;
+  transition: all .2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: white;
+}
+.export-btn:hover { transform: translateY(-1px); }
+.export-btn.excel { border-color: #2e7d32; color: #2e7d32; }
+.export-btn.excel:hover { background: #e8f5e9; }
+.export-btn.pdf { border-color: #c62828; color: #c62828; }
+.export-btn.pdf:hover { background: #ffebee; }
+.export-btn.word { border-color: #1565c0; color: #1565c0; }
+.export-btn.word:hover { background: #e3f2fd; }
+
+/* Activity feed */
+.activity-feed { list-style: none; }
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: .9rem;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-avatar { font-size: 1.5rem; }
+.activity-text { flex: 1; color: #546e7a; }
+.activity-text strong { color: var(--text-dark); }
+.activity-time { color: #b0bec5; font-size: .8rem; }
+
+/* Credentials table (for generated accounts) */
+.creds-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+.creds-table th {
+  background: var(--ocean-light);
+  color: var(--ocean-deep);
+  padding: 10px 14px;
+  text-align: left;
+  font-family: 'Baloo 2', cursive;
+}
+.creds-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid #e8eaf6;
+  font-family: monospace;
+  font-size: .9rem;
+}
+
+/* Score edit inline */
+.score-edit-input {
+  width: 60px;
+  padding: 4px 8px;
+  border: 2px solid var(--ocean-bright);
+  border-radius: 8px;
+  font-size: .9rem;
+  text-align: center;
+  font-weight: 700;
+}
+
+@media (max-width: 768px) {
+  .analytics-grid { grid-template-columns: 1fr; }
+  .teacher-container { padding-top: 60px; }
+  .teacher-card { padding: 20px; }
+}

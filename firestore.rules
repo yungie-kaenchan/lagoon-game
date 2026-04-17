@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: check if requester is a teacher
+    function isTeacher() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Students can read their own profile
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Teachers can read/write all users
+      allow read, write: if isTeacher();
+    }
+
+    // Game sessions
+    match /gameSessions/{sessionId} {
+      // Students can create their own sessions
+      allow create: if request.auth != null &&
+        request.resource.data.studentId == request.auth.uid;
+      // Students can update their own in-progress sessions
+      allow update: if request.auth != null &&
+        resource.data.studentId == request.auth.uid;
+      // Students can read their own sessions
+      allow read: if request.auth != null &&
+        resource.data.studentId == request.auth.uid;
+      // Teachers can read/write all sessions
+      allow read, write: if isTeacher();
+    }
+
+    // Scoreboard - readable by all authenticated users, writable by own student
+    match /scoreboard/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+      // Teachers can also write (for overrides)
+      allow write: if isTeacher();
+    }
+
+    // Score overrides - only teachers
+    match /scoreOverrides/{overrideId} {
+      allow read, write: if isTeacher();
+    }
+  }
+}

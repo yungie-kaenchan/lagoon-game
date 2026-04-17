@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teacher Dashboard - Thai Lagoon Adventure</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/teacher.css">
+</head>
+<body>
+
+<div class="teacher-container" id="main" style="display:none;">
+  <div class="teacher-header">
+    <div class="teacher-title">&#127758; Teacher Dashboard</div>
+    <div class="teacher-subtitle" id="teacher-welcome">Welcome back!</div>
+  </div>
+
+  <nav class="teacher-nav">
+    <a href="dashboard.html" class="active">&#127968; Dashboard</a>
+    <a href="students.html">&#128101; Students</a>
+    <a href="analytics.html">&#128202; Analytics</a>
+    <a href="reports.html">&#128196; Reports</a>
+  </nav>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon">&#128101;</div>
+      <div class="stat-value" id="stat-students">0</div>
+      <div class="stat-label">Total Students</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">&#127918;</div>
+      <div class="stat-value" id="stat-games">0</div>
+      <div class="stat-label">Total Games</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">&#128200;</div>
+      <div class="stat-value" id="stat-avg">-</div>
+      <div class="stat-label">Avg Score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">&#11088;</div>
+      <div class="stat-value" id="stat-masters">0</div>
+      <div class="stat-label">Ocean Masters</div>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+    <div class="teacher-card">
+      <h2>&#128293; Recent Activity</h2>
+      <ul class="activity-feed" id="activity-feed">
+        <li style="color:#78909c; padding:20px; text-align:center;">Loading activity...</li>
+      </ul>
+    </div>
+
+    <div class="teacher-card">
+      <h2>&#127942; Top Performers</h2>
+      <div id="top-performers">
+        <p style="color:#78909c; text-align:center; padding:20px;">Loading...</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="teacher-card" style="margin-top:20px;">
+    <h2>&#9889; Quick Actions</h2>
+    <div class="btn-row" style="justify-content:flex-start; gap:12px;">
+      <a href="students.html" class="btn btn-primary btn-sm">&#10133; Add Student</a>
+      <a href="students.html#bulk" class="btn btn-success btn-sm">&#128196; Bulk Import</a>
+      <a href="reports.html" class="btn btn-coral btn-sm">&#128229; Export Reports</a>
+      <a href="analytics.html" class="btn btn-outline btn-sm" style="color:var(--ocean-deep); border-color:var(--ocean-deep);">&#128202; View Analytics</a>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { requireAuth } from '../js/auth.js';
+import { spawnDecorations, renderProfileBadge } from '../js/ui-utils.js';
+import {
+  db, collection, query, where, orderBy, limit, getDocs, onSnapshot
+} from '../js/firebase-config.js';
+
+spawnDecorations();
+
+(async () => {
+  const user = await requireAuth('teacher');
+  if (!user) return;
+
+  renderProfileBadge(user, '..');
+  document.getElementById('main').style.display = 'block';
+  document.getElementById('teacher-welcome').textContent = `Welcome, ${user.displayName || user.username}!`;
+
+  // Load stats
+  try {
+    // Students count
+    const studentsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
+    document.getElementById('stat-students').textContent = studentsSnap.size;
+
+    // Scoreboard stats
+    const scoreboardSnap = await getDocs(collection(db, 'scoreboard'));
+    let totalGames = 0, totalScore = 0, masters = 0, count = 0;
+    scoreboardSnap.forEach(doc => {
+      const d = doc.data();
+      totalGames += d.totalGamesPlayed || 0;
+      totalScore += (d.averageScore || 0);
+      count++;
+      if (d.bestStars >= 3) masters++;
+    });
+    document.getElementById('stat-games').textContent = totalGames;
+    document.getElementById('stat-avg').textContent = count > 0 ? (totalScore / count).toFixed(1) : '-';
+    document.getElementById('stat-masters').textContent = masters;
+  } catch (e) { console.error(e); }
+
+  // Recent activity
+  try {
+    const recentQ = query(
+      collection(db, 'gameSessions'),
+      where('isComplete', '==', true),
+      orderBy('completedAt', 'desc'),
+      limit(8)
+    );
+    const recentSnap = await getDocs(recentQ);
+    const feed = document.getElementById('activity-feed');
+
+    if (recentSnap.empty) {
+      feed.innerHTML = '<li style="color:#78909c; padding:20px; text-align:center;">No activity yet</li>';
+    } else {
+      feed.innerHTML = '';
+      recentSnap.forEach(doc => {
+        const d = doc.data();
+        const date = d.completedAt?.toDate ? d.completedAt.toDate() : new Date();
+        const timeAgo = getTimeAgo(date);
+        const li = document.createElement('li');
+        li.className = 'activity-item';
+        li.innerHTML = `
+          <span class="activity-avatar">${'&#11088;'.repeat(d.starRating || 1)}</span>
+          <span class="activity-text"><strong>${d.studentName || 'Student'}</strong> scored ${d.totalScore}/11</span>
+          <span class="activity-time">${timeAgo}</span>
+        `;
+        feed.appendChild(li);
+      });
+    }
+  } catch (e) { console.error(e); }
+
+  // Top performers
+  try {
+    const topQ = query(collection(db, 'scoreboard'), orderBy('bestScore', 'desc'), limit(5));
+    const topSnap = await getDocs(topQ);
+    const container = document.getElementById('top-performers');
+
+    if (topSnap.empty) {
+      container.innerHTML = '<p style="color:#78909c; text-align:center;">No scores yet</p>';
+    } else {
+      let html = '';
+      let rank = 1;
+      topSnap.forEach(doc => {
+        const d = doc.data();
+        const medal = rank === 1 ? '&#129351;' : rank === 2 ? '&#129352;' : rank === 3 ? '&#129353;' : `#${rank}`;
+        html += `<div class="quick-stat">
+          <span class="quick-stat-icon">${medal}</span>
+          <span style="font-size:1.2rem;">${d.avatarEmoji || '&#128032;'}</span>
+          <span class="quick-stat-label" style="flex:1; color:#333;">${d.studentName}</span>
+          <span class="quick-stat-value">${d.bestScore}/11</span>
+        </div>`;
+        rank++;
+      });
+      container.innerHTML = html;
+    }
+  } catch (e) { console.error(e); }
+})();
+
+function getTimeAgo(date) {
+  const seconds = Math.floor((new Date() - date) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+</script>
+</body>
+</html>

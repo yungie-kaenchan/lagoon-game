@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard - Thai Lagoon Adventure</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/student.css">
+</head>
+<body>
+
+<div class="student-container" id="main" style="display:none;">
+  <div class="welcome-section">
+    <div class="welcome-avatar" id="user-avatar"></div>
+    <div class="welcome-title" id="welcome-msg">Welcome back!</div>
+    <div class="welcome-subtitle">Ready for another ocean adventure?</div>
+  </div>
+
+  <div class="play-btn-container">
+    <button class="play-btn" onclick="window.location.href='game.html'">🎮 Play Game</button>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon">🎮</div>
+      <div class="stat-value" id="stat-games">0</div>
+      <div class="stat-label">Games Played</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">⭐</div>
+      <div class="stat-value" id="stat-best">0/11</div>
+      <div class="stat-label">Best Score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🏆</div>
+      <div class="stat-value" id="stat-rank">-</div>
+      <div class="stat-label">Current Rank</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">📊</div>
+      <div class="stat-value" id="stat-avg">0</div>
+      <div class="stat-label">Average Score</div>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <div class="dash-card">
+      <h3>🏆 Top Players</h3>
+      <div id="mini-scoreboard"><p style="color:#78909c; font-size:.9rem;">Loading...</p></div>
+      <div style="text-align:center; margin-top:12px;">
+        <a href="scoreboard.html" class="btn btn-sm btn-primary">View Full Scoreboard</a>
+      </div>
+    </div>
+    <div class="dash-card">
+      <h3>📝 Recent Games</h3>
+      <div id="recent-games"><p style="color:#78909c; font-size:.9rem;">Loading...</p></div>
+      <div style="text-align:center; margin-top:12px;">
+        <a href="profile.html" class="btn btn-sm btn-primary">View All History</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { requireAuth } from '../js/auth.js';
+import { spawnDecorations, renderProfileBadge } from '../js/ui-utils.js';
+import { getStudentScoreboardEntry, getStudentSessions } from '../js/game-state.js';
+import { startScoreboardListener, renderMiniScoreboard } from '../js/scoreboard.js';
+
+spawnDecorations();
+
+(async () => {
+  const user = await requireAuth('student');
+  if (!user) return;
+
+  renderProfileBadge(user, '..');
+  document.getElementById('main').style.display = 'block';
+  document.getElementById('user-avatar').textContent = user.avatarEmoji || '🐠';
+  document.getElementById('welcome-msg').textContent = `Welcome, ${user.displayName || user.username}!`;
+
+  // Load stats
+  try {
+    const entry = await getStudentScoreboardEntry(user.uid);
+    if (entry) {
+      document.getElementById('stat-games').textContent = entry.totalGamesPlayed || 0;
+      document.getElementById('stat-best').textContent = `${entry.bestScore || 0}/11`;
+      document.getElementById('stat-avg').textContent = entry.averageScore || 0;
+    }
+  } catch (e) { console.error(e); }
+
+  // Load recent games
+  try {
+    const sessions = await getStudentSessions(user.uid, 3);
+    const container = document.getElementById('recent-games');
+    if (sessions.length === 0) {
+      container.innerHTML = '<p style="color:#78909c; font-size:.9rem;">No games yet. Start playing!</p>';
+    } else {
+      container.innerHTML = sessions.map(s => {
+        const date = s.completedAt?.toDate ? s.completedAt.toDate().toLocaleDateString() : 'In progress';
+        return `<div class="quick-stat">
+          <span class="quick-stat-icon">${'⭐'.repeat(s.starRating || 1)}</span>
+          <span class="quick-stat-label">${date}</span>
+          <span class="quick-stat-value">${s.totalScore}/11</span>
+        </div>`;
+      }).join('');
+    }
+  } catch (e) { console.error(e); }
+
+  // Mini scoreboard
+  startScoreboardListener((rankings) => {
+    const container = document.getElementById('mini-scoreboard');
+    renderMiniScoreboard(rankings, user.uid, container, 5);
+
+    // Calculate rank
+    const myRank = rankings.findIndex(r => r.studentId === user.uid);
+    document.getElementById('stat-rank').textContent = myRank >= 0 ? `#${myRank + 1}` : '-';
+  });
+})();
+</script>
+</body>
+</html>

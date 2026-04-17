@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Management - Thai Lagoon Adventure</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/teacher.css">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<div class="teacher-container" id="main" style="display:none;">
+  <div class="teacher-header">
+    <div class="teacher-title">&#128101; Student Management</div>
+    <div class="teacher-subtitle">Create, manage, and organize student accounts</div>
+  </div>
+
+  <nav class="teacher-nav">
+    <a href="dashboard.html">&#127968; Dashboard</a>
+    <a href="students.html" class="active">&#128101; Students</a>
+    <a href="analytics.html">&#128202; Analytics</a>
+    <a href="reports.html">&#128196; Reports</a>
+  </nav>
+
+  <!-- Toolbar -->
+  <div class="teacher-card">
+    <div class="toolbar">
+      <button class="btn btn-primary btn-sm" onclick="openAddModal()">&#10133; Add Student</button>
+      <button class="btn btn-success btn-sm" onclick="openAutoGenModal()">&#9889; Auto-Generate Accounts</button>
+      <button class="btn btn-coral btn-sm" onclick="openBulkModal()">&#128196; Import from Excel</button>
+      <div class="toolbar-spacer"></div>
+      <button class="btn btn-outline btn-sm" style="color:var(--ocean-deep); border-color:#ccc;" onclick="exportStudentList()">&#128229; Export List</button>
+    </div>
+
+    <div id="student-table-container">
+      <p style="text-align:center; color:#78909c; padding:20px;">Loading students...</p>
+    </div>
+  </div>
+
+  <!-- Generated Credentials Display -->
+  <div class="teacher-card" id="creds-card" style="display:none;">
+    <h2>&#128273; Generated Credentials</h2>
+    <p style="color:#78909c; margin-bottom:12px;">Save these credentials! Students will need them to log in.</p>
+    <div id="creds-table-container"></div>
+    <div class="toolbar" style="margin-top:16px;">
+      <button class="btn btn-success btn-sm" onclick="exportCredentials()">&#128229; Download as Excel</button>
+      <button class="btn btn-outline btn-sm" style="color:#666; border-color:#ccc;" onclick="document.getElementById('creds-card').style.display='none'">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Student Modal -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('add-modal')">&times;</button>
+    <h2>&#10133; Add Student</h2>
+    <form id="add-form" onsubmit="handleAddStudent(event)">
+      <div class="form-group">
+        <label>Display Name *</label>
+        <input class="form-input" id="add-name" required placeholder="e.g. Somchai">
+      </div>
+      <div class="form-group">
+        <label>Username *</label>
+        <input class="form-input" id="add-username" required placeholder="e.g. somchai_01" pattern="[a-zA-Z0-9_]+" title="Letters, numbers, underscores only">
+      </div>
+      <div class="form-group">
+        <label>Password *</label>
+        <input class="form-input" id="add-password" required placeholder="Min 6 characters" minlength="6">
+        <button type="button" style="background:none; border:none; color:var(--ocean-mid); cursor:pointer; font-size:.85rem; margin-top:4px;" onclick="document.getElementById('add-password').value=generatePwd()">Generate random password</button>
+      </div>
+      <div class="form-group">
+        <label>Class Group</label>
+        <input class="form-input" id="add-class" placeholder="e.g. P4/1">
+      </div>
+      <div class="form-group">
+        <label>Avatar</label>
+        <div id="avatar-picker" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+      </div>
+      <div style="text-align:center; margin-top:20px;">
+        <button type="submit" class="btn btn-primary" id="add-btn">Create Student</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Auto-Generate Modal -->
+<div class="modal-overlay" id="autogen-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('autogen-modal')">&times;</button>
+    <h2>&#9889; Auto-Generate Accounts</h2>
+    <form id="autogen-form" onsubmit="handleAutoGen(event)">
+      <div class="form-group">
+        <label>Number of Accounts *</label>
+        <input class="form-input" id="gen-count" type="number" min="1" max="100" required value="10">
+      </div>
+      <div class="form-group">
+        <label>Username Prefix *</label>
+        <input class="form-input" id="gen-prefix" required value="student" placeholder="e.g. student, p4">
+      </div>
+      <div class="form-group">
+        <label>Starting Number</label>
+        <input class="form-input" id="gen-start" type="number" min="1" value="1">
+      </div>
+      <div class="form-group">
+        <label>Class Group</label>
+        <input class="form-input" id="gen-class" placeholder="e.g. P4/1">
+      </div>
+      <div style="text-align:center; margin-top:20px;">
+        <button type="submit" class="btn btn-success" id="autogen-btn">Generate Accounts</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Bulk Import Modal -->
+<div class="modal-overlay" id="bulk-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('bulk-modal')">&times;</button>
+    <h2>&#128196; Import from Excel</h2>
+    <p style="color:#78909c; margin-bottom:16px;">Upload an Excel file (.xlsx) with student names. Required column: <strong>Name</strong>. Optional: <strong>Class</strong>, <strong>Username</strong>.</p>
+    <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+      <div class="upload-icon">&#128194;</div>
+      <div class="upload-text">Click to select Excel file or drag & drop</div>
+      <div class="upload-hint">.xlsx files only</div>
+    </div>
+    <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(event)">
+    <div id="import-preview" style="display:none;">
+      <h3 style="font-family:'Baloo 2',cursive; color:var(--ocean-deep); margin-bottom:8px;">Preview</h3>
+      <div id="import-preview-table"></div>
+      <div style="text-align:center; margin-top:16px;">
+        <button class="btn btn-success" onclick="handleBulkImport()" id="import-btn">&#10003; Import & Create Accounts</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { requireAuth, createStudentAccount } from '../js/auth.js';
+import { spawnDecorations, renderProfileBadge, showToast, generatePassword, generateUsername } from '../js/ui-utils.js';
+import {
+  db, collection, query, where, getDocs, doc, updateDoc, deleteDoc, orderBy
+} from '../js/firebase-config.js';
+
+spawnDecorations();
+
+let currentTeacher = null;
+let allStudents = [];
+let selectedAvatar = '🐠';
+let generatedCreds = [];
+let importData = [];
+
+const AVATARS = ['🐠','🐡','🐟','🦈','🐬','🐙','🦀','🦐','🐢','🐳','🧊','🌟'];
+
+(async () => {
+  const user = await requireAuth('teacher');
+  if (!user) return;
+
+  currentTeacher = user;
+  renderProfileBadge(user, '..');
+  document.getElementById('main').style.display = 'block';
+
+  // Avatar picker
+  const picker = document.getElementById('avatar-picker');
+  AVATARS.forEach(a => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = a;
+    btn.style.cssText = 'font-size:1.8rem; padding:6px; border:3px solid transparent; border-radius:12px; cursor:pointer; background:none; transition:all .15s;';
+    if (a === selectedAvatar) btn.style.borderColor = 'var(--ocean-bright)';
+    btn.onclick = () => {
+      selectedAvatar = a;
+      picker.querySelectorAll('button').forEach(b => b.style.borderColor = 'transparent');
+      btn.style.borderColor = 'var(--ocean-bright)';
+    };
+    picker.appendChild(btn);
+  });
+
+  // Drag & drop
+  const uploadArea = document.getElementById('upload-area');
+  uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+  uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+  uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) processFile(e.dataTransfer.files[0]);
+  });
+
+  loadStudents();
+})();
+
+async function loadStudents() {
+  try {
+    const q = query(collection(db, 'users'), where('role', '==', 'student'), orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    allStudents = [];
+    snap.forEach(d => allStudents.push({ id: d.id, ...d.data() }));
+
+    // Also get scoreboard data
+    const scoreSnap = await getDocs(collection(db, 'scoreboard'));
+    const scoreMap = {};
+    scoreSnap.forEach(d => { scoreMap[d.id] = d.data(); });
+
+    renderStudentTable(allStudents, scoreMap);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('student-table-container').innerHTML = '<p style="color:var(--danger);">Failed to load students.</p>';
+  }
+}
+
+function renderStudentTable(students, scoreMap = {}) {
+  const container = document.getElementById('student-table-container');
+  if (students.length === 0) {
+    container.innerHTML = '<p style="text-align:center; color:#78909c; padding:20px;">No students yet. Create your first student account!</p>';
+    return;
+  }
+
+  let html = `<table class="data-table">
+    <thead><tr>
+      <th>Student</th><th>Username</th><th>Class</th>
+      <th style="text-align:center">Games</th><th style="text-align:center">Best</th>
+      <th style="text-align:center">Status</th><th style="text-align:center">Actions</th>
+    </tr></thead><tbody>`;
+
+  for (const s of students) {
+    const score = scoreMap[s.uid] || {};
+    html += `<tr>
+      <td><span style="font-size:1.2rem; margin-right:6px;">${s.avatarEmoji || '🐠'}</span>${s.displayName || s.username}</td>
+      <td style="font-family:monospace; font-size:.85rem;">${s.username}</td>
+      <td>${s.classGroup || '-'}</td>
+      <td style="text-align:center">${score.totalGamesPlayed || 0}</td>
+      <td style="text-align:center; font-weight:700;">${score.bestScore != null ? score.bestScore + '/11' : '-'}</td>
+      <td style="text-align:center"><span class="status-badge ${s.isActive !== false ? 'active' : 'inactive'}">${s.isActive !== false ? 'Active' : 'Inactive'}</span></td>
+      <td style="text-align:center">
+        <div class="student-actions">
+          <button class="action-btn" title="View Report" onclick="window.location.href='reports.html?student=${s.uid}'">&#128196;</button>
+          <button class="action-btn" title="Toggle Active" onclick="toggleStudent('${s.uid}', ${s.isActive !== false})">&#9899;</button>
+          <button class="action-btn danger" title="Delete" onclick="deleteStudent('${s.uid}','${s.displayName}')">&#128465;</button>
+        </div>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// Modal helpers
+window.openAddModal = () => document.getElementById('add-modal').classList.add('open');
+window.openAutoGenModal = () => document.getElementById('autogen-modal').classList.add('open');
+window.openBulkModal = () => document.getElementById('bulk-modal').classList.add('open');
+window.closeModal = (id) => document.getElementById(id).classList.remove('open');
+window.generatePwd = generatePassword;
+
+// Add single student
+window.handleAddStudent = async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('add-btn');
+  btn.disabled = true; btn.textContent = 'Creating...';
+
+  try {
+    await createStudentAccount(
+      document.getElementById('add-username').value,
+      document.getElementById('add-password').value,
+      document.getElementById('add-name').value,
+      document.getElementById('add-class').value,
+      selectedAvatar,
+      currentTeacher.uid
+    );
+    showToast('Student created successfully!', 'success');
+    closeModal('add-modal');
+    document.getElementById('add-form').reset();
+    loadStudents();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Create Student';
+};
+
+// Auto-generate accounts
+window.handleAutoGen = async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('autogen-btn');
+  const count = parseInt(document.getElementById('gen-count').value);
+  const prefix = document.getElementById('gen-prefix').value.trim();
+  const start = parseInt(document.getElementById('gen-start').value) || 1;
+  const classGroup = document.getElementById('gen-class').value.trim();
+
+  btn.disabled = true; btn.textContent = 'Generating...';
+  generatedCreds = [];
+
+  for (let i = 0; i < count; i++) {
+    const num = start + i;
+    const username = generateUsername(prefix, num);
+    const password = generatePassword();
+    const displayName = `Student ${num}`;
+
+    try {
+      await createStudentAccount(username, password, displayName, classGroup, AVATARS[i % AVATARS.length], currentTeacher.uid);
+      generatedCreds.push({ username, password, displayName, classGroup });
+    } catch (err) {
+      generatedCreds.push({ username, password: 'FAILED: ' + err.message, displayName, classGroup });
+    }
+  }
+
+  closeModal('autogen-modal');
+  showGeneratedCreds();
+  showToast(`Generated ${generatedCreds.filter(c => !c.password.startsWith('FAILED')).length}/${count} accounts`, 'success');
+  loadStudents();
+  btn.disabled = false; btn.textContent = 'Generate Accounts';
+};
+
+function showGeneratedCreds() {
+  const card = document.getElementById('creds-card');
+  card.style.display = 'block';
+  const container = document.getElementById('creds-table-container');
+
+  let html = `<table class="creds-table">
+    <thead><tr><th>#</th><th>Name</th><th>Username</th><th>Password</th><th>Class</th></tr></thead><tbody>`;
+  generatedCreds.forEach((c, i) => {
+    const isFailed = c.password.startsWith('FAILED');
+    html += `<tr style="${isFailed ? 'background:#ffebee;' : ''}">
+      <td>${i+1}</td><td>${c.displayName}</td><td>${c.username}</td>
+      <td>${c.password}</td><td>${c.classGroup || '-'}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+  card.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Export credentials as Excel
+window.exportCredentials = () => {
+  if (generatedCreds.length === 0) return;
+  const data = generatedCreds.map((c, i) => ({
+    '#': i + 1, Name: c.displayName, Username: c.username, Password: c.password, Class: c.classGroup || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Credentials');
+  XLSX.writeFile(wb, 'LagoonGame_Credentials.xlsx');
+};
+
+// Excel file handling
+window.handleFileSelect = (e) => {
+  if (e.target.files.length > 0) processFile(e.target.files[0]);
+};
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws);
+
+      if (rows.length === 0) { showToast('Empty spreadsheet', 'error'); return; }
+
+      // Find name column (case-insensitive)
+      const nameCol = Object.keys(rows[0]).find(k => k.toLowerCase().includes('name'));
+      const classCol = Object.keys(rows[0]).find(k => k.toLowerCase().includes('class'));
+      const userCol = Object.keys(rows[0]).find(k => k.toLowerCase().includes('username') || k.toLowerCase().includes('user'));
+
+      if (!nameCol) { showToast('No "Name" column found in the spreadsheet', 'error'); return; }
+
+      importData = rows.map((r, i) => ({
+        name: r[nameCol]?.toString().trim() || '',
+        classGroup: classCol ? (r[classCol]?.toString().trim() || '') : '',
+        username: userCol ? (r[userCol]?.toString().trim() || '') : '',
+        index: i
+      })).filter(r => r.name);
+
+      // Generate usernames and passwords for preview
+      importData.forEach((r, i) => {
+        if (!r.username) r.username = generateUsername('student', i + 1);
+        r.password = generatePassword();
+      });
+
+      // Show preview
+      document.getElementById('import-preview').style.display = 'block';
+      let html = `<table class="creds-table">
+        <thead><tr><th>Name</th><th>Username</th><th>Password</th><th>Class</th></tr></thead><tbody>`;
+      importData.forEach(r => {
+        html += `<tr><td>${r.name}</td><td>${r.username}</td><td>${r.password}</td><td>${r.classGroup || '-'}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      document.getElementById('import-preview-table').innerHTML = html;
+
+    } catch (err) {
+      showToast('Failed to read file: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+window.handleBulkImport = async () => {
+  if (importData.length === 0) return;
+  const btn = document.getElementById('import-btn');
+  btn.disabled = true; btn.textContent = 'Creating accounts...';
+  generatedCreds = [];
+
+  for (const row of importData) {
+    try {
+      await createStudentAccount(row.username, row.password, row.name, row.classGroup, AVATARS[Math.floor(Math.random()*AVATARS.length)], currentTeacher.uid);
+      generatedCreds.push({ username: row.username, password: row.password, displayName: row.name, classGroup: row.classGroup });
+    } catch (err) {
+      generatedCreds.push({ username: row.username, password: 'FAILED: ' + err.message, displayName: row.name, classGroup: row.classGroup });
+    }
+  }
+
+  closeModal('bulk-modal');
+  showGeneratedCreds();
+  const success = generatedCreds.filter(c => !c.password.startsWith('FAILED')).length;
+  showToast(`Imported ${success}/${importData.length} students`, success > 0 ? 'success' : 'error');
+  loadStudents();
+  btn.disabled = false; btn.textContent = '&#10003; Import & Create Accounts';
+};
+
+// Toggle student active status
+window.toggleStudent = async (uid, isActive) => {
+  try {
+    await updateDoc(doc(db, 'users', uid), { isActive: !isActive });
+    showToast(`Student ${isActive ? 'deactivated' : 'activated'}`, 'info');
+    loadStudents();
+  } catch (e) { showToast(e.message, 'error'); }
+};
+
+// Delete student
+window.deleteStudent = async (uid, name) => {
+  if (!confirm(`Are you sure you want to delete ${name}? This cannot be undone.`)) return;
+  try {
+    await deleteDoc(doc(db, 'users', uid));
+    showToast('Student removed', 'info');
+    loadStudents();
+  } catch (e) { showToast(e.message, 'error'); }
+};
+
+// Export student list
+window.exportStudentList = () => {
+  if (allStudents.length === 0) { showToast('No students to export', 'error'); return; }
+  const data = allStudents.map(s => ({
+    Name: s.displayName, Username: s.username, Class: s.classGroup || '', Status: s.isActive !== false ? 'Active' : 'Inactive'
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Students');
+  XLSX.writeFile(wb, 'LagoonGame_Students.xlsx');
+};
+</script>
+</body>
+</html>

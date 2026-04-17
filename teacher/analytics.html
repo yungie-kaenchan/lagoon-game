@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytics - Thai Lagoon Adventure</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/teacher.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="teacher-container" id="main" style="display:none;">
+  <div class="teacher-header">
+    <div class="teacher-title">&#128202; Analytics</div>
+    <div class="teacher-subtitle">Track student performance across all levels</div>
+  </div>
+
+  <nav class="teacher-nav">
+    <a href="dashboard.html">&#127968; Dashboard</a>
+    <a href="students.html">&#128101; Students</a>
+    <a href="analytics.html" class="active">&#128202; Analytics</a>
+    <a href="reports.html">&#128196; Reports</a>
+  </nav>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon">&#128101;</div>
+      <div class="stat-value" id="stat-total">0</div>
+      <div class="stat-label">Students</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">&#127918;</div>
+      <div class="stat-value" id="stat-sessions">0</div>
+      <div class="stat-label">Total Sessions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">&#128200;</div>
+      <div class="stat-value" id="stat-avg">-</div>
+      <div class="stat-label">Class Average</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">&#127942;</div>
+      <div class="stat-value" id="stat-completion">-</div>
+      <div class="stat-label">Completion Rate</div>
+    </div>
+  </div>
+
+  <div class="analytics-grid">
+    <div class="chart-card">
+      <h3>&#128202; Score Distribution</h3>
+      <canvas id="chart-distribution"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>&#11088; Average Score by Level</h3>
+      <canvas id="chart-levels"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>&#128200; Games Over Time</h3>
+      <canvas id="chart-timeline"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>&#127919; Question Accuracy</h3>
+      <canvas id="chart-questions"></canvas>
+    </div>
+  </div>
+
+  <!-- Individual Student Drill-down -->
+  <div class="teacher-card" style="margin-top:20px;">
+    <h2>&#128269; Student Drill-Down</h2>
+    <div class="report-filters">
+      <select id="student-select" class="form-input" style="max-width:300px;" onchange="loadStudentDrilldown()">
+        <option value="">-- Select a student --</option>
+      </select>
+    </div>
+    <div id="drilldown-content" style="display:none;">
+      <div class="stats-grid" style="margin-top:16px;">
+        <div class="stat-card">
+          <div class="stat-icon">&#127918;</div>
+          <div class="stat-value" id="dd-games">0</div>
+          <div class="stat-label">Games</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">&#11088;</div>
+          <div class="stat-value" id="dd-best">-</div>
+          <div class="stat-label">Best Score</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">&#128200;</div>
+          <div class="stat-value" id="dd-avg">-</div>
+          <div class="stat-label">Average</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">&#127942;</div>
+          <div class="stat-value" id="dd-stars">-</div>
+          <div class="stat-label">Best Stars</div>
+        </div>
+      </div>
+      <div style="background:white; border-radius:16px; padding:20px; margin-top:16px;">
+        <canvas id="chart-student" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { requireAuth } from '../js/auth.js';
+import { spawnDecorations, renderProfileBadge } from '../js/ui-utils.js';
+import {
+  db, collection, query, where, getDocs, orderBy, limit
+} from '../js/firebase-config.js';
+
+spawnDecorations();
+
+let allSessions = [];
+let allStudents = [];
+let studentChart = null;
+
+(async () => {
+  const user = await requireAuth('teacher');
+  if (!user) return;
+
+  renderProfileBadge(user, '..');
+  document.getElementById('main').style.display = 'block';
+
+  // Load all data
+  try {
+    const studentsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
+    allStudents = [];
+    studentsSnap.forEach(d => allStudents.push({ id: d.id, ...d.data() }));
+
+    const sessionsSnap = await getDocs(query(collection(db, 'gameSessions'), where('isComplete', '==', true), orderBy('completedAt', 'desc')));
+    allSessions = [];
+    sessionsSnap.forEach(d => allSessions.push({ id: d.id, ...d.data() }));
+
+    // Populate student select
+    const select = document.getElementById('student-select');
+    allStudents.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+    allStudents.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.uid;
+      opt.textContent = `${s.avatarEmoji || ''} ${s.displayName || s.username} ${s.classGroup ? '(' + s.classGroup + ')' : ''}`;
+      select.appendChild(opt);
+    });
+
+    renderStats();
+    renderCharts();
+  } catch (e) {
+    console.error('Failed to load analytics:', e);
+  }
+})();
+
+function renderStats() {
+  document.getElementById('stat-total').textContent = allStudents.length;
+  document.getElementById('stat-sessions').textContent = allSessions.length;
+
+  if (allSessions.length > 0) {
+    const avg = allSessions.reduce((sum, s) => sum + (s.totalScore || 0), 0) / allSessions.length;
+    document.getElementById('stat-avg').textContent = avg.toFixed(1) + '/11';
+
+    const completed = allSessions.filter(s => s.totalScore >= 1).length;
+    document.getElementById('stat-completion').textContent = Math.round(completed / allSessions.length * 100) + '%';
+  }
+}
+
+function renderCharts() {
+  // Score Distribution
+  const scoreBuckets = Array(12).fill(0); // 0-11
+  allSessions.forEach(s => { scoreBuckets[s.totalScore || 0]++; });
+
+  new Chart(document.getElementById('chart-distribution'), {
+    type: 'bar',
+    data: {
+      labels: Array.from({length: 12}, (_, i) => i),
+      datasets: [{
+        label: 'Students',
+        data: scoreBuckets,
+        backgroundColor: scoreBuckets.map((_, i) => i >= 10 ? '#4caf50' : i >= 7 ? '#29b6f6' : i >= 4 ? '#ff9800' : '#ef5350'),
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: { x: { title: { display: true, text: 'Score' } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  // Average by Level
+  const levelAvgs = [1, 2, 3].map(level => {
+    let total = 0, count = 0;
+    allSessions.forEach(s => {
+      if (s.levelScores && s.levelScores[level]) {
+        total += s.levelScores[level].correct || 0;
+        count++;
+      }
+    });
+    return count > 0 ? total / count : 0;
+  });
+  const levelMax = [5, 3, 3];
+
+  new Chart(document.getElementById('chart-levels'), {
+    type: 'bar',
+    data: {
+      labels: ['Level 1 (Words)', 'Level 2 (Sentences)', 'Level 3 (Questions)'],
+      datasets: [
+        { label: 'Average', data: levelAvgs.map(v => v.toFixed(1)), backgroundColor: '#1565c0', borderRadius: 6 },
+        { label: 'Maximum', data: levelMax, backgroundColor: '#e0e0e0', borderRadius: 6 }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: { y: { beginAtZero: true } },
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
+
+  // Games Over Time (last 30 days)
+  const dayMap = {};
+  allSessions.forEach(s => {
+    if (s.completedAt?.toDate) {
+      const d = s.completedAt.toDate().toLocaleDateString();
+      dayMap[d] = (dayMap[d] || 0) + 1;
+    }
+  });
+  const sortedDays = Object.keys(dayMap).sort((a, b) => new Date(a) - new Date(b)).slice(-30);
+
+  new Chart(document.getElementById('chart-timeline'), {
+    type: 'line',
+    data: {
+      labels: sortedDays,
+      datasets: [{
+        label: 'Games Played',
+        data: sortedDays.map(d => dayMap[d]),
+        borderColor: '#00c853',
+        backgroundColor: 'rgba(0,200,83,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  // Question Accuracy
+  const qLabels = [
+    'marine','lake','shell','shrimp','crab',
+    'Sentence 1','Sentence 2','Sentence 3',
+    'Q: Shrimps','Q: Bigger','Q: Cost'
+  ];
+  const qCorrect = Array(11).fill(0);
+  const qTotal = Array(11).fill(0);
+
+  allSessions.forEach(s => {
+    if (s.questionDetails) {
+      s.questionDetails.forEach(qd => {
+        const idx = qd.level === 1 ? qd.questionIndex :
+                    qd.level === 2 ? 5 + qd.questionIndex :
+                    8 + qd.questionIndex;
+        if (idx >= 0 && idx < 11) {
+          qTotal[idx]++;
+          if (qd.isCorrect) qCorrect[idx]++;
+        }
+      });
+    }
+  });
+
+  const accuracy = qCorrect.map((c, i) => qTotal[i] > 0 ? Math.round(c / qTotal[i] * 100) : 0);
+
+  new Chart(document.getElementById('chart-questions'), {
+    type: 'bar',
+    data: {
+      labels: qLabels,
+      datasets: [{
+        label: 'Accuracy %',
+        data: accuracy,
+        backgroundColor: accuracy.map(a => a >= 80 ? '#4caf50' : a >= 50 ? '#ff9800' : '#ef5350'),
+        borderRadius: 6
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      scales: { x: { min: 0, max: 100, ticks: { callback: v => v + '%' } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+}
+
+window.loadStudentDrilldown = async () => {
+  const uid = document.getElementById('student-select').value;
+  const content = document.getElementById('drilldown-content');
+  if (!uid) { content.style.display = 'none'; return; }
+
+  content.style.display = 'block';
+  const studentSessions = allSessions.filter(s => s.studentId === uid);
+
+  if (studentSessions.length === 0) {
+    document.getElementById('dd-games').textContent = '0';
+    document.getElementById('dd-best').textContent = '-';
+    document.getElementById('dd-avg').textContent = '-';
+    document.getElementById('dd-stars').textContent = '-';
+    return;
+  }
+
+  const best = Math.max(...studentSessions.map(s => s.totalScore || 0));
+  const avg = studentSessions.reduce((sum, s) => sum + (s.totalScore || 0), 0) / studentSessions.length;
+  const bestStars = Math.max(...studentSessions.map(s => s.starRating || 0));
+
+  document.getElementById('dd-games').textContent = studentSessions.length;
+  document.getElementById('dd-best').textContent = best + '/11';
+  document.getElementById('dd-avg').textContent = avg.toFixed(1);
+  document.getElementById('dd-stars').textContent = '⭐'.repeat(bestStars);
+
+  // Student score chart
+  if (studentChart) studentChart.destroy();
+  const reversed = studentSessions.slice().reverse();
+  studentChart = new Chart(document.getElementById('chart-student'), {
+    type: 'line',
+    data: {
+      labels: reversed.map((s, i) => s.completedAt?.toDate ? s.completedAt.toDate().toLocaleDateString() : `Game ${i+1}`),
+      datasets: [{
+        label: 'Score',
+        data: reversed.map(s => s.totalScore),
+        borderColor: '#1565c0',
+        backgroundColor: 'rgba(21,101,192,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: '#1565c0',
+        pointRadius: 5
+      }]
+    },
+    options: {
+      responsive: true,
+      scales: { y: { min: 0, max: 11, ticks: { stepSize: 1 } } },
+      plugins: { legend: { display: false } }
+    }
+  });
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scoreboard - Thai Lagoon Adventure</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/student.css">
+</head>
+<body>
+
+<div class="student-nav">
+  <a href="dashboard.html">&larr; Dashboard</a>
+</div>
+
+<div class="scoreboard-container" id="main" style="display:none;">
+  <div class="scoreboard-header">
+    <div style="font-size:3rem; margin-bottom:8px;">&#127942;</div>
+    <div class="scoreboard-title">Live Scoreboard</div>
+    <div class="scoreboard-subtitle">See how you rank against other players!</div>
+  </div>
+
+  <div class="scoreboard-card">
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      LIVE - Updates in real-time
+    </div>
+    <div id="scoreboard-body">
+      <div style="text-align:center; padding:40px;">
+        <div class="spinner" style="border-color:rgba(21,101,192,0.2); border-top-color:#1565c0;"></div>
+        <p style="color:#78909c;">Loading scoreboard...</p>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center; margin-top:20px;">
+    <a href="game.html" class="btn btn-primary">&#127918; Play to Improve Your Rank!</a>
+  </div>
+</div>
+
+<script type="module">
+import { requireAuth } from '../js/auth.js';
+import { spawnDecorations, renderProfileBadge } from '../js/ui-utils.js';
+import { startScoreboardListener, renderScoreboardTable } from '../js/scoreboard.js';
+
+spawnDecorations();
+
+(async () => {
+  const user = await requireAuth('student');
+  if (!user) return;
+
+  renderProfileBadge(user, '..');
+  document.getElementById('main').style.display = 'block';
+
+  startScoreboardListener((rankings) => {
+    renderScoreboardTable(rankings, user.uid, document.getElementById('scoreboard-body'));
+  });
+})();
+</script>
+</body>
+</html>

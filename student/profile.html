@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Profile - Thai Lagoon Adventure</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/student.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="student-nav">
+  <a href="dashboard.html">&larr; Dashboard</a>
+</div>
+
+<div class="student-container" id="main" style="display:none;">
+  <div class="profile-header">
+    <div class="profile-large-avatar" id="avatar"></div>
+    <div class="profile-display-name" id="display-name"></div>
+    <div class="profile-class" id="class-group"></div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon">&#127918;</div>
+      <div class="stat-value" id="stat-games">0</div>
+      <div class="stat-label">Games Played</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">&#11088;</div>
+      <div class="stat-value" id="stat-best">0/11</div>
+      <div class="stat-label">Best Score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">&#127942;</div>
+      <div class="stat-value" id="stat-rank">-</div>
+      <div class="stat-label">Current Rank</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">&#128200;</div>
+      <div class="stat-value" id="stat-avg">0</div>
+      <div class="stat-label">Average Score</div>
+    </div>
+  </div>
+
+  <div class="chart-container">
+    <h3>&#128200; Score History</h3>
+    <canvas id="score-chart" height="200"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h3>&#128221; Game History</h3>
+    <div id="history-table">
+      <p style="color:#78909c;">Loading...</p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { requireAuth } from '../js/auth.js';
+import { spawnDecorations, renderProfileBadge } from '../js/ui-utils.js';
+import { getStudentSessions, getStudentScoreboardEntry } from '../js/game-state.js';
+import { startScoreboardListener } from '../js/scoreboard.js';
+
+spawnDecorations();
+
+(async () => {
+  const user = await requireAuth('student');
+  if (!user) return;
+
+  renderProfileBadge(user, '..');
+  document.getElementById('main').style.display = 'block';
+  document.getElementById('avatar').textContent = user.avatarEmoji || '&#128032;';
+  document.getElementById('display-name').textContent = user.displayName || user.username;
+  document.getElementById('class-group').textContent = user.classGroup ? `Class: ${user.classGroup}` : '';
+
+  // Stats
+  try {
+    const entry = await getStudentScoreboardEntry(user.uid);
+    if (entry) {
+      document.getElementById('stat-games').textContent = entry.totalGamesPlayed || 0;
+      document.getElementById('stat-best').textContent = `${entry.bestScore || 0}/11`;
+      document.getElementById('stat-avg').textContent = entry.averageScore || 0;
+    }
+  } catch (e) { console.error(e); }
+
+  // Rank
+  startScoreboardListener((rankings) => {
+    const idx = rankings.findIndex(r => r.studentId === user.uid);
+    document.getElementById('stat-rank').textContent = idx >= 0 ? `#${idx + 1}` : '-';
+  });
+
+  // Session history
+  try {
+    const sessions = await getStudentSessions(user.uid, 50);
+    const container = document.getElementById('history-table');
+
+    if (sessions.length === 0) {
+      container.innerHTML = '<p style="color:#78909c;">No games played yet. Start your adventure!</p>';
+    } else {
+      let html = `<table class="data-table">
+        <thead><tr>
+          <th>Date</th><th style="text-align:center">Score</th><th style="text-align:center">Stars</th>
+          <th style="text-align:center">L1</th><th style="text-align:center">L2</th><th style="text-align:center">L3</th>
+        </tr></thead><tbody>`;
+
+      for (const s of sessions) {
+        const date = s.completedAt?.toDate ? s.completedAt.toDate().toLocaleDateString() : 'N/A';
+        const l1 = s.levelScores?.[1]?.correct ?? '-';
+        const l2 = s.levelScores?.[2]?.correct ?? '-';
+        const l3 = s.levelScores?.[3]?.correct ?? '-';
+        html += `<tr>
+          <td>${date}</td>
+          <td style="text-align:center; font-weight:700;">${s.totalScore}/11</td>
+          <td style="text-align:center;">${'&#11088;'.repeat(s.starRating || 1)}</td>
+          <td style="text-align:center;">${l1}/5</td>
+          <td style="text-align:center;">${l2}/3</td>
+          <td style="text-align:center;">${l3}/3</td>
+        </tr>`;
+      }
+      html += '</tbody></table>';
+      container.innerHTML = html;
+
+      // Chart
+      const labels = sessions.slice().reverse().map((s, i) => {
+        if (s.completedAt?.toDate) return s.completedAt.toDate().toLocaleDateString();
+        return `Game ${i + 1}`;
+      });
+      const scores = sessions.slice().reverse().map(s => s.totalScore);
+
+      new Chart(document.getElementById('score-chart'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Score',
+            data: scores,
+            borderColor: '#1565c0',
+            backgroundColor: 'rgba(21,101,192,0.1)',
+            fill: true,
+            tension: 0.3,
+            pointBackgroundColor: '#1565c0',
+            pointRadius: 5
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { min: 0, max: 11, ticks: { stepSize: 1 } }
+          },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+  } catch (e) { console.error(e); }
+})();
+</script>
+</body>
+</html>

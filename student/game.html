@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Play - Thai Lagoon Island Adventure</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/game.css">
+</head>
+<body class="with-bg">
+
+<div class="student-nav">
+  <a href="dashboard.html">← Dashboard</a>
+</div>
+
+<header class="game-header">
+  <h1>🌊 Thai Lagoon Island Adventure <br><span>And the 3 Ancient Orbs 🌊</span></h1>
+  <div class="score-bar">
+    <div class="score-pill" id="score-display">⭐ Score: 0</div>
+    <div class="score-pill" id="level-display">📚 Level 1</div>
+  </div>
+</header>
+
+<div class="level-tabs" id="level-tabs">
+  <button class="level-tab active" data-level="1" onclick="window._jumpLevel(1)">🔤 Level 1</button>
+  <button class="level-tab locked" data-level="2" onclick="window._jumpLevel(2)">🗣️ Level 2</button>
+  <button class="level-tab locked" data-level="3" onclick="window._jumpLevel(3)">💬 Level 3</button>
+</div>
+
+<div class="game-container">
+
+  <!-- Start / Instructions Screen -->
+  <div class="card" id="start-screen">
+    <div class="start-art">🐠</div>
+    <div class="start-title">Ready to Learn English?</div>
+    <div class="start-desc">
+      Speak words and sentences about ocean animals!<br>
+      Use your voice to play through 3 exciting levels.
+    </div>
+
+    <div class="instructions-box">
+      <h3>📖 How to Play</h3>
+      <div class="instruction-step">
+        <div class="step-num">1</div>
+        <div>Look at the picture and read the word or question on screen.</div>
+      </div>
+      <div class="instruction-step">
+        <div class="step-num">2</div>
+        <div>Tap the <strong>microphone button</strong> 🎤 and speak your answer clearly in English.</div>
+      </div>
+      <div class="instruction-step">
+        <div class="step-num">3</div>
+        <div>If correct, you earn a point! If not, you can try again.</div>
+      </div>
+      <div class="instruction-step">
+        <div class="step-num">4</div>
+        <div>Complete all 3 levels to become an <strong>Ocean Master</strong>! 🏆</div>
+      </div>
+    </div>
+
+    <div class="levels-preview">
+      <div class="lp-item">
+        <div class="lp-icon">🔤</div>
+        <div class="lp-name">Level 1<br>Say Words</div>
+      </div>
+      <div class="lp-item">
+        <div class="lp-icon">🗣️</div>
+        <div class="lp-name">Level 2<br>Sentences</div>
+      </div>
+      <div class="lp-item">
+        <div class="lp-icon">💬</div>
+        <div class="lp-name">Level 3<br>Answer Q's</div>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="window._startGame()">🚀 Start Adventure!</button>
+  </div>
+
+  <!-- Game Screen -->
+  <div class="card" id="game-screen" style="display:none;">
+    <div class="no-speech" id="no-speech-warn">
+      ⚠️ Your browser may not support voice input. Try Google Chrome for best results.
+    </div>
+    <div class="level-label" id="level-label">Level 1 — Say the Word</div>
+    <div class="progress-dots" id="progress-dots"></div>
+
+    <div class="question-box">
+      <img id="q-img" src="" style="max-width:100%; width:500px; margin-bottom:10px;" alt="Question image">
+      <div class="question-text" id="q-text">crab</div>
+      <div class="question-hint" id="q-hint">👆 Say this word clearly!</div>
+    </div>
+
+    <div class="mic-area">
+      <button class="mic-btn" id="mic-btn" onclick="window._toggleMic()">🎤</button>
+      <div class="mic-label" id="mic-label">Tap to speak</div>
+    </div>
+
+    <div class="transcript-box" id="transcript">Your words will appear here...</div>
+    <div class="feedback" id="feedback">✅ Correct!</div>
+
+    <div class="btn-row">
+      <button class="btn btn-coral" id="try-again-btn" onclick="window._tryAgain()" style="display:none">🔄 Try Again</button>
+      <button class="btn btn-success" id="next-btn" onclick="window._nextQuestion()" style="display:none">Next ➡️</button>
+    </div>
+  </div>
+
+  <!-- End Screen -->
+  <div class="card" id="end-screen" style="display:none;">
+    <div class="trophy">🏆</div>
+    <div class="star-row" id="star-row">⭐⭐⭐</div>
+    <div class="final-score" id="final-score">9 / 11</div>
+    <div class="final-msg" id="final-msg">Amazing job! You're an ocean explorer! 🌊</div>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="window._restartGame()">🔄 Play Again</button>
+      <a href="dashboard.html" class="btn btn-success">🏠 Dashboard</a>
+      <a href="scoreboard.html" class="btn btn-coral">🏆 Scoreboard</a>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+import { requireAuth } from '../js/auth.js';
+import { spawnDecorations, renderProfileBadge } from '../js/ui-utils.js';
+import { setCurrentUser, startGame, toggleMic, tryAgain, nextQuestion, jumpLevel, restartGame } from '../js/game-engine.js';
+
+spawnDecorations();
+
+(async () => {
+  const user = await requireAuth('student');
+  if (!user) return;
+
+  renderProfileBadge(user, '..');
+  setCurrentUser(user);
+
+  // Expose functions to onclick handlers
+  window._startGame = startGame;
+  window._toggleMic = toggleMic;
+  window._tryAgain = tryAgain;
+  window._nextQuestion = nextQuestion;
+  window._jumpLevel = jumpLevel;
+  window._restartGame = restartGame;
+})();
+</script>
+</body>
+</html>

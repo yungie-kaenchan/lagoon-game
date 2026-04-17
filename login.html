@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - Thai Lagoon Island Adventure</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/shared.css">
+<link rel="stylesheet" href="css/login.css">
+</head>
+<body>
+
+<div class="login-container">
+  <div class="login-card">
+    <div class="login-art">🌊</div>
+    <div class="login-title">Thai Lagoon Adventure</div>
+    <div class="login-subtitle">Log in to start your ocean journey!</div>
+
+    <div class="login-tabs">
+      <button class="login-tab active" data-tab="student" onclick="switchTab('student')">Student</button>
+      <button class="login-tab" data-tab="teacher" onclick="switchTab('teacher')">Teacher</button>
+    </div>
+
+    <div class="login-error" id="login-error"></div>
+
+    <form class="login-form" id="login-form" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="username" id="username-label">Username</label>
+        <input class="form-input" id="username" type="text" placeholder="Enter your username" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input class="form-input" id="password" type="password" placeholder="Enter your password" required autocomplete="current-password">
+      </div>
+      <div style="text-align:center; margin-top:20px;">
+        <button type="submit" class="btn btn-primary" id="login-btn" style="width:100%; justify-content:center;">
+          🚀 Let's Go!
+        </button>
+      </div>
+    </form>
+
+    <div class="login-footer">
+      <span id="footer-text">Ask your teacher for your login details!</span>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { login, getCurrentUser } from './js/auth.js';
+import { spawnDecorations } from './js/ui-utils.js';
+
+spawnDecorations();
+
+// Warn if Firebase not configured
+fetch('./js/firebase-config.js').then(r => r.text()).then(t => {
+  if (t.indexOf('YOUR_API_KEY') !== -1 || t.indexOf('YOUR_PROJECT_ID') !== -1) {
+    const err = document.getElementById('login-error');
+    err.innerHTML = '⚠️ <strong>Firebase not configured.</strong> Edit <code style="background:rgba(0,0,0,0.08);padding:2px 4px;border-radius:4px;">js/firebase-config.js</code> with your credentials. See <a href="index.html">setup page</a> or <code>SETUP.md</code>.';
+    err.classList.add('visible');
+  }
+}).catch(() => {});
+
+// Check if already logged in
+getCurrentUser().then(user => {
+  if (user) {
+    if (user.role === 'teacher') window.location.href = 'teacher/dashboard.html';
+    else window.location.href = 'student/dashboard.html';
+  }
+}).catch(() => {});
+
+let currentTab = 'student';
+
+window.switchTab = function(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.login-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+
+  const label = document.getElementById('username-label');
+  const footer = document.getElementById('footer-text');
+  const btn = document.getElementById('login-btn');
+
+  if (tab === 'teacher') {
+    label.textContent = 'Username';
+    footer.textContent = 'Teacher portal access';
+    btn.textContent = '🌟 Teacher Login';
+    document.getElementById('username').placeholder = 'Enter teacher username';
+  } else {
+    label.textContent = 'Username';
+    footer.textContent = 'Ask your teacher for your login details!';
+    btn.textContent = "🚀 Let's Go!";
+    document.getElementById('username').placeholder = 'Enter your username';
+  }
+};
+
+window.handleLogin = async function(e) {
+  e.preventDefault();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const errorEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-btn');
+
+  errorEl.classList.remove('visible');
+  btn.disabled = true;
+  btn.textContent = 'Logging in...';
+
+  try {
+    const user = await login(username, password);
+
+    if (currentTab === 'teacher' && user.role !== 'teacher') {
+      throw new Error('This account is not a teacher account.');
+    }
+    if (currentTab === 'student' && user.role !== 'student') {
+      throw new Error('This account is not a student account. Use the Teacher tab.');
+    }
+
+    if (user.role === 'teacher') {
+      window.location.href = 'teacher/dashboard.html';
+    } else {
+      window.location.href = 'student/dashboard.html';
+    }
+  } catch (err) {
+    let msg = 'Login failed. Please check your username and password.';
+    if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      msg = 'Wrong username or password. Try again!';
+    } else if (err.message) {
+      msg = err.message;
+    }
+    errorEl.textContent = msg;
+    errorEl.classList.add('visible');
+    btn.disabled = false;
+    btn.textContent = currentTab === 'teacher' ? '🌟 Teacher Login' : "🚀 Let's Go!";
+  }
+};
+</script>
+</body>
+</html>

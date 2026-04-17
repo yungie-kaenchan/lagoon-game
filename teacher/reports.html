@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports - Thai Lagoon Adventure</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/shared.css">
+<link rel="stylesheet" href="../css/teacher.css">
+<!-- Export libraries -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+</head>
+<body>
+
+<div class="teacher-container" id="main" style="display:none;">
+  <div class="teacher-header">
+    <div class="teacher-title">&#128196; Reports & Export</div>
+    <div class="teacher-subtitle">View, edit, and export student performance data</div>
+  </div>
+
+  <nav class="teacher-nav">
+    <a href="dashboard.html">&#127968; Dashboard</a>
+    <a href="students.html">&#128101; Students</a>
+    <a href="analytics.html">&#128202; Analytics</a>
+    <a href="reports.html" class="active">&#128196; Reports</a>
+  </nav>
+
+  <!-- Filters & Export -->
+  <div class="teacher-card">
+    <h2>&#128270; Filter & Export</h2>
+    <div class="report-filters">
+      <select id="student-filter" class="form-input" style="max-width:260px;" onchange="loadReport()">
+        <option value="all">All Students</option>
+      </select>
+      <select id="class-filter" class="form-input" style="max-width:180px;" onchange="loadReport()">
+        <option value="all">All Classes</option>
+      </select>
+      <div style="flex:1;"></div>
+      <div class="export-btns">
+        <button class="export-btn excel" onclick="doExportExcel()">&#128196; Excel</button>
+        <button class="export-btn pdf" onclick="doExportPDF()">&#128196; PDF</button>
+        <button class="export-btn word" onclick="doExportWord()">&#128196; Word</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report Table -->
+  <div class="teacher-card">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+      <h2 style="margin-bottom:0;">&#128202; Session Reports</h2>
+      <div style="flex:1;"></div>
+      <button class="btn btn-sm btn-success" onclick="openAddScoreModal()">&#10133; Add Manual Entry</button>
+    </div>
+    <div id="report-table-container">
+      <p style="text-align:center; color:#78909c; padding:20px;">Loading reports...</p>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Score Modal -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('edit-modal')">&times;</button>
+    <h2>&#9999;&#65039; Edit Score</h2>
+    <form onsubmit="handleEditScore(event)">
+      <input type="hidden" id="edit-session-id">
+      <div class="form-group">
+        <label>Student</label>
+        <input class="form-input" id="edit-student-name" readonly>
+      </div>
+      <div class="form-group">
+        <label>Original Score</label>
+        <input class="form-input" id="edit-original-score" readonly>
+      </div>
+      <div class="form-group">
+        <label>New Score (0-11) *</label>
+        <input class="form-input" id="edit-new-score" type="number" min="0" max="11" required>
+      </div>
+      <div class="form-group">
+        <label>Reason for Override *</label>
+        <input class="form-input" id="edit-reason" required placeholder="e.g. Technical issue during test">
+      </div>
+      <div style="text-align:center; margin-top:20px;">
+        <button type="submit" class="btn btn-primary" id="edit-btn">Save Override</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Add Manual Score Modal -->
+<div class="modal-overlay" id="addscore-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('addscore-modal')">&times;</button>
+    <h2>&#10133; Add Manual Score Entry</h2>
+    <form onsubmit="handleAddManualScore(event)">
+      <div class="form-group">
+        <label>Student *</label>
+        <select class="form-input" id="manual-student" required>
+          <option value="">-- Select Student --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Total Score (0-11) *</label>
+        <input class="form-input" id="manual-score" type="number" min="0" max="11" required>
+      </div>
+      <div class="form-group">
+        <label>Level 1 Score (0-5)</label>
+        <input class="form-input" id="manual-l1" type="number" min="0" max="5" value="0">
+      </div>
+      <div class="form-group">
+        <label>Level 2 Score (0-3)</label>
+        <input class="form-input" id="manual-l2" type="number" min="0" max="3" value="0">
+      </div>
+      <div class="form-group">
+        <label>Level 3 Score (0-3)</label>
+        <input class="form-input" id="manual-l3" type="number" min="0" max="3" value="0">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <input class="form-input" id="manual-notes" placeholder="e.g. Offline assessment">
+      </div>
+      <div style="text-align:center; margin-top:20px;">
+        <button type="submit" class="btn btn-success" id="manual-btn">Add Entry</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+import { requireAuth } from '../js/auth.js';
+import { spawnDecorations, renderProfileBadge, showToast } from '../js/ui-utils.js';
+import { exportToExcel, exportToPDF, exportToWord } from '../js/export-utils.js';
+import {
+  db, collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, deleteDoc,
+  orderBy, serverTimestamp, Timestamp
+} from '../js/firebase-config.js';
+
+spawnDecorations();
+
+let currentTeacher = null;
+let allStudents = [];
+let allSessions = [];
+let filteredSessions = [];
+let classGroups = new Set();
+
+(async () => {
+  const user = await requireAuth('teacher');
+  if (!user) return;
+
+  currentTeacher = user;
+  renderProfileBadge(user, '..');
+  document.getElementById('main').style.display = 'block';
+
+  // Check URL params for pre-selected student
+  const params = new URLSearchParams(window.location.search);
+  const preSelectedStudent = params.get('student');
+
+  // Load students
+  const studentsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
+  allStudents = [];
+  studentsSnap.forEach(d => allStudents.push({ id: d.id, ...d.data() }));
+
+  const studentSelect = document.getElementById('student-filter');
+  const manualSelect = document.getElementById('manual-student');
+  const classFilter = document.getElementById('class-filter');
+
+  allStudents.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+  allStudents.forEach(s => {
+    const opt1 = document.createElement('option');
+    opt1.value = s.uid;
+    opt1.textContent = `${s.avatarEmoji || ''} ${s.displayName || s.username}`;
+    studentSelect.appendChild(opt1);
+
+    const opt2 = opt1.cloneNode(true);
+    manualSelect.appendChild(opt2);
+
+    if (s.classGroup) classGroups.add(s.classGroup);
+  });
+
+  classGroups.forEach(cg => {
+    const opt = document.createElement('option');
+    opt.value = cg;
+    opt.textContent = cg;
+    classFilter.appendChild(opt);
+  });
+
+  if (preSelectedStudent) {
+    studentSelect.value = preSelectedStudent;
+  }
+
+  await loadReport();
+})();
+
+window.loadReport = async function() {
+  const studentId = document.getElementById('student-filter').value;
+  const classGroup = document.getElementById('class-filter').value;
+
+  try {
+    let q;
+    if (studentId !== 'all') {
+      q = query(collection(db, 'gameSessions'), where('studentId', '==', studentId), orderBy('completedAt', 'desc'));
+    } else {
+      q = query(collection(db, 'gameSessions'), where('isComplete', '==', true), orderBy('completedAt', 'desc'));
+    }
+
+    const snap = await getDocs(q);
+    allSessions = [];
+    snap.forEach(d => allSessions.push({ id: d.id, ...d.data() }));
+
+    // Filter by class group
+    if (classGroup !== 'all') {
+      const classStudentIds = allStudents.filter(s => s.classGroup === classGroup).map(s => s.uid);
+      filteredSessions = allSessions.filter(s => classStudentIds.includes(s.studentId));
+    } else {
+      filteredSessions = allSessions;
+    }
+
+    renderReportTable();
+  } catch (e) {
+    console.error(e);
+    document.getElementById('report-table-container').innerHTML = '<p style="color:var(--danger);">Failed to load reports.</p>';
+  }
+};
+
+function renderReportTable() {
+  const container = document.getElementById('report-table-container');
+  if (filteredSessions.length === 0) {
+    container.innerHTML = '<p style="text-align:center; color:#78909c; padding:20px;">No sessions found.</p>';
+    return;
+  }
+
+  let html = `<table class="data-table">
+    <thead><tr>
+      <th>Student</th><th>Date</th>
+      <th style="text-align:center">Score</th>
+      <th style="text-align:center">Stars</th>
+      <th style="text-align:center">L1</th>
+      <th style="text-align:center">L2</th>
+      <th style="text-align:center">L3</th>
+      <th style="text-align:center">Actions</th>
+    </tr></thead><tbody>`;
+
+  for (const s of filteredSessions) {
+    const date = s.completedAt?.toDate ? s.completedAt.toDate().toLocaleString() : 'N/A';
+    const l1 = s.levelScores?.[1]?.correct ?? '-';
+    const l2 = s.levelScores?.[2]?.correct ?? '-';
+    const l3 = s.levelScores?.[3]?.correct ?? '-';
+
+    html += `<tr>
+      <td>${s.studentName || 'Unknown'}</td>
+      <td style="font-size:.85rem;">${date}</td>
+      <td style="text-align:center; font-weight:700;">${s.totalScore}/11</td>
+      <td style="text-align:center;">${'⭐'.repeat(s.starRating || 1)}</td>
+      <td style="text-align:center;">${l1}/5</td>
+      <td style="text-align:center;">${l2}/3</td>
+      <td style="text-align:center;">${l3}/3</td>
+      <td style="text-align:center;">
+        <div class="student-actions">
+          <button class="action-btn" title="Edit Score" onclick="openEditModal('${s.id}','${s.studentName}',${s.totalScore})">&#9999;&#65039;</button>
+          <button class="action-btn" title="Duplicate" onclick="duplicateSession('${s.id}')">&#128203;</button>
+          <button class="action-btn danger" title="Delete" onclick="deleteSession('${s.id}')">&#128465;</button>
+        </div>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// Modal helpers
+window.closeModal = (id) => document.getElementById(id).classList.remove('open');
+window.openAddScoreModal = () => document.getElementById('addscore-modal').classList.add('open');
+
+window.openEditModal = (sessionId, studentName, score) => {
+  document.getElementById('edit-session-id').value = sessionId;
+  document.getElementById('edit-student-name').value = studentName;
+  document.getElementById('edit-original-score').value = score + '/11';
+  document.getElementById('edit-new-score').value = score;
+  document.getElementById('edit-reason').value = '';
+  document.getElementById('edit-modal').classList.add('open');
+};
+
+// Edit score
+window.handleEditScore = async (e) => {
+  e.preventDefault();
+  const sessionId = document.getElementById('edit-session-id').value;
+  const newScore = parseInt(document.getElementById('edit-new-score').value);
+  const reason = document.getElementById('edit-reason').value;
+  const btn = document.getElementById('edit-btn');
+
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  try {
+    const sessionRef = doc(db, 'gameSessions', sessionId);
+    const snap = await getDoc(sessionRef);
+    const originalScore = snap.data()?.totalScore || 0;
+
+    const starRating = newScore >= 10 ? 3 : newScore >= 7 ? 2 : 1;
+    await updateDoc(sessionRef, { totalScore: newScore, starRating });
+
+    // Log the override
+    await addDoc(collection(db, 'scoreOverrides'), {
+      teacherId: currentTeacher.uid,
+      studentId: snap.data().studentId,
+      sessionId,
+      originalScore,
+      newScore,
+      reason,
+      createdAt: serverTimestamp()
+    });
+
+    showToast('Score updated', 'success');
+    closeModal('edit-modal');
+    await loadReport();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Save Override';
+};
+
+// Add manual score
+window.handleAddManualScore = async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('manual-btn');
+  const studentId = document.getElementById('manual-student').value;
+  const student = allStudents.find(s => s.uid === studentId);
+  if (!student) { showToast('Select a student', 'error'); return; }
+
+  const totalScore = parseInt(document.getElementById('manual-score').value);
+  const l1 = parseInt(document.getElementById('manual-l1').value) || 0;
+  const l2 = parseInt(document.getElementById('manual-l2').value) || 0;
+  const l3 = parseInt(document.getElementById('manual-l3').value) || 0;
+  const notes = document.getElementById('manual-notes').value;
+
+  btn.disabled = true; btn.textContent = 'Adding...';
+
+  try {
+    const starRating = totalScore >= 10 ? 3 : totalScore >= 7 ? 2 : 1;
+    await addDoc(collection(db, 'gameSessions'), {
+      studentId: student.uid,
+      studentName: student.displayName || student.username,
+      startedAt: serverTimestamp(),
+      completedAt: serverTimestamp(),
+      totalScore,
+      maxPossible: 11,
+      starRating,
+      levelScores: {
+        1: { correct: l1, total: 5, attempts: l1 },
+        2: { correct: l2, total: 3, attempts: l2 },
+        3: { correct: l3, total: 3, attempts: l3 }
+      },
+      questionDetails: [],
+      isComplete: true,
+      manualEntry: true,
+      notes: notes || 'Manual entry by teacher'
+    });
+
+    showToast('Manual entry added', 'success');
+    closeModal('addscore-modal');
+    await loadReport();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = 'Add Entry';
+};
+
+// Duplicate session
+window.duplicateSession = async (sessionId) => {
+  try {
+    const snap = await getDoc(doc(db, 'gameSessions', sessionId));
+    if (!snap.exists()) return;
+    const data = { ...snap.data() };
+    delete data.id;
+    data.completedAt = serverTimestamp();
+    data.notes = (data.notes || '') + ' (Duplicated by teacher)';
+    data.manualEntry = true;
+    await addDoc(collection(db, 'gameSessions'), data);
+    showToast('Session duplicated', 'success');
+    await loadReport();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+// Delete session
+window.deleteSession = async (sessionId) => {
+  if (!confirm('Are you sure you want to delete this session? This cannot be undone.')) return;
+  try {
+    await deleteDoc(doc(db, 'gameSessions', sessionId));
+    showToast('Session deleted', 'info');
+    await loadReport();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
+
+// ── EXPORT FUNCTIONS ──
+function getExportData() {
+  return filteredSessions.map(s => {
+    const date = s.completedAt?.toDate ? s.completedAt.toDate().toLocaleString() : 'N/A';
+    return {
+      Student: s.studentName || 'Unknown',
+      Date: date,
+      'Total Score': `${s.totalScore}/11`,
+      Stars: s.starRating || 1,
+      'Level 1': `${s.levelScores?.[1]?.correct ?? '-'}/5`,
+      'Level 2': `${s.levelScores?.[2]?.correct ?? '-'}/3`,
+      'Level 3': `${s.levelScores?.[3]?.correct ?? '-'}/3`
+    };
+  });
+}
+
+function getExportRows() {
+  return filteredSessions.map(s => {
+    const date = s.completedAt?.toDate ? s.completedAt.toDate().toLocaleString() : 'N/A';
+    return [
+      s.studentName || 'Unknown',
+      date,
+      `${s.totalScore}/11`,
+      '⭐'.repeat(s.starRating || 1),
+      `${s.levelScores?.[1]?.correct ?? '-'}/5`,
+      `${s.levelScores?.[2]?.correct ?? '-'}/3`,
+      `${s.levelScores?.[3]?.correct ?? '-'}/3`
+    ];
+  });
+}
+
+const COLUMNS = ['Student', 'Date', 'Score', 'Stars', 'Level 1', 'Level 2', 'Level 3'];
+
+window.doExportExcel = () => {
+  const data = getExportData();
+  if (data.length === 0) { showToast('No data to export', 'error'); return; }
+  try {
+    exportToExcel(data, 'Reports', 'LagoonGame_Reports.xlsx');
+    showToast('Excel downloaded', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.doExportPDF = () => {
+  const rows = getExportRows();
+  if (rows.length === 0) { showToast('No data to export', 'error'); return; }
+  const studentId = document.getElementById('student-filter').value;
+  const subtitle = studentId !== 'all'
+    ? `Student: ${allStudents.find(s => s.uid === studentId)?.displayName || 'Selected'}`
+    : `All Students (${rows.length} sessions)`;
+  try {
+    exportToPDF('Thai Lagoon Adventure - Report', subtitle, COLUMNS, rows, 'LagoonGame_Reports.pdf');
+    showToast('PDF downloaded', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+};
+
+window.doExportWord = () => {
+  const rows = getExportRows();
+  if (rows.length === 0) { showToast('No data to export', 'error'); return; }
+  const studentId = document.getElementById('student-filter').value;
+  const subtitle = studentId !== 'all'
+    ? `Student: ${allStudents.find(s => s.uid === studentId)?.displayName || 'Selected'}`
+    : `All Students (${rows.length} sessions)`;
+  try {
+    exportToWord('Thai Lagoon Adventure - Report', subtitle, COLUMNS, rows, 'LagoonGame_Reports.docx');
+    showToast('Word document downloaded', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+};
+</script>
+</body>
+</html>
